@@ -10,14 +10,7 @@ const allowed = (process.env.FRONTEND_URL || '')
   .map((s) => s.trim().replace(/\/$/, ''))
   .filter(Boolean);
 
-app.use(
-  cors({
-    origin(origin, cb) {
-      if (!origin || allowed.length === 0 || allowed.includes(origin)) return cb(null, true);
-      return cb(null, false);
-    },
-  })
-);
+app.use(cors());
 app.use(express.json({ limit: '1mb' }));
 
 app.get('/', (req, res) => res.json({ ok: true, name: 'Ombor API' }));
