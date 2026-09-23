@@ -2,20 +2,23 @@
 
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Download, History, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { History, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { TopBar, ListSkeleton, Empty, ErrorBox, Sheet, useToast } from '@/components/ui';
 import MovementItem, { MovementDetail } from '@/components/MovementItem';
+import ExportButton from '@/components/ExportSheet';
 import { useApi } from '@/lib/hooks';
 import { useAuth } from '@/lib/auth';
+import { useT } from '@/lib/i18n';
 import { api } from '@/lib/api';
 import { PERIODS, periodRange } from '@/lib/period';
-import { dayKey, dayLabel, toDateInput } from '@/lib/format';
+import { dayKey, dayLabelKey, toDateInput, unitLabel, currency } from '@/lib/format';
 
 const PAGE = 50;
 
 function TarixInner() {
   const params = useSearchParams();
   const toast = useToast();
+  const t = useT();
   const { can } = useAuth();
   const [type, setType] = useState(params.get('type') || '');
   const [period, setPeriod] = useState(params.get('type') ? 'today' : '30d');
@@ -26,7 +29,6 @@ function TarixInner() {
   const [selected, setSelected] = useState(null);
   const [items, setItems] = useState([]);
   const [page, setPage] = useState(1);
-  const [exporting, setExporting] = useState(false);
 
   const range = useMemo(() => periodRange(period, custom), [period, custom]);
   const query = { type, ...range, ...filters, limit: PAGE, page };
@@ -45,10 +47,16 @@ function TarixInner() {
 
   useEffect(() => {
     if (!data) return;
-    setItems((prev) => (data.page === 1 ? data.items : [...prev, ...data.items.filter((m) => !prev.some((p) => p._id === m._id))]));
+    setItems((prev) =>
+      data.page === 1 ? data.items : [...prev, ...data.items.filter((m) => !prev.some((p) => p._id === m._id))]
+    );
   }, [data]);
 
   const activeFilters = Object.values(filters).filter(Boolean).length;
+  const dayLabel = (d) => {
+    const r = dayLabelKey(d);
+    return r.key ? t(r.key) : r.text;
+  };
 
   const groups = [];
   for (const m of items) {
@@ -57,67 +65,91 @@ function TarixInner() {
     groups[groups.length - 1].items.push(m);
   }
 
-  async function exportCsv() {
-    setExporting(true);
-    try {
-      const all = await api.get('/movements', { type, ...range, ...filters, limit: 5000 });
-      const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-      const head = ['Sana', 'Turi', 'Mahsulot', 'Kategoriya', 'Miqdor', 'Birlik', 'Narx', 'Summa', "Bo'lim", 'Texnika', "Mas'ul", 'Yetkazib beruvchi', 'Nakladnoy', 'Izoh', 'Kiritdi'];
-      const rows = all.items.map((m) => [
-        new Date(m.date).toLocaleString('ru-RU'),
-        m.type === 'in' ? 'Kirim' : 'Chiqim',
-        m.product?.name,
-        m.product?.category?.name,
-        String(m.quantity).replace('.', ','),
-        m.product?.unit,
-        Math.round(m.price || 0),
-        Math.round(m.total || 0),
-        m.department?.name,
-        m.vehicle ? `${m.vehicle.name}${m.vehicle.code ? ` (${m.vehicle.code})` : ''}` : '',
-        m.person,
-        m.supplier,
-        m.docNumber,
-        m.note,
-        m.createdBy?.name,
-      ]);
-      const csv = '﻿' + [head, ...rows].map((r) => r.map(esc).join(';')).join('\r\n');
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `ombor-tarix-${toDateInput()}.csv`;
-      a.click();
-      URL.revokeObjectURL(a.href);
-      toast(`${all.items.length} ta yozuv yuklab olindi`);
-    } catch (e) {
-      toast(e.message, 'error');
-    } finally {
-      setExporting(false);
+  // Excel: harakatlar tarixi (kim, qayerga, qancha)
+  async function buildExport() {
+    const all = await api.get('/movements', { type, ...range, ...filters, limit: 5000 });
+    const list = all.items;
+    const rows = list.map((m) => [
+      new Date(m.date),
+      m.type === 'in' ? t('Kirim') : t('Chiqim'),
+      m.product?.name || '',
+      m.product?.category?.name || '',
+      m.type === 'in' ? m.quantity : '',
+      m.type === 'out' ? m.quantity : '',
+      unitLabel(m.product?.unit),
+      m.price || '',
+      m.total || '',
+      m.department?.name || '',
+      m.vehicle ? `${m.vehicle.name}${m.vehicle.code ? ` (${m.vehicle.code})` : ''}` : '',
+      m.person || '',
+      m.supplier || '',
+      m.docNumber || '',
+      m.note || '',
+      m.createdBy?.name || '',
+    ]);
+    const sumIn = list.filter((m) => m.type === 'in').reduce((s, m) => s + (m.total || 0), 0);
+    const sumOut = list.filter((m) => m.type === 'out').reduce((s, m) => s + (m.total || 0), 0);
+    if (rows.length) {
+      const total = ['', t('JAMI'), '', '', '', '', '', '', sumIn + sumOut, '', '', '', '', '', '', ''];
+      total.__bold = true;
+      rows.push(total);
     }
+    const periodText = `${range.from ? new Date(range.from).toLocaleDateString('ru-RU') : '…'} — ${
+      range.to ? new Date(range.to).toLocaleDateString('ru-RU') : '…'
+    }`;
+    return {
+      filename: `ombor-tarix-${toDateInput()}.xlsx`,
+      rowCount: list.length,
+      sheets: [
+        {
+          name: t('Tarix'),
+          title: t('Kirim-chiqim tarixi'),
+          subtitle: `${t('Davr')}: ${periodText}`,
+          columns: [
+            { header: t('Sana'), width: 18, type: 'datetime' },
+            { header: t('Turi'), width: 10 },
+            { header: t('Mahsulot'), width: 30 },
+            { header: t('Kategoriya'), width: 18 },
+            { header: t('Kirim'), width: 12, type: 'num' },
+            { header: t('Chiqim'), width: 12, type: 'num' },
+            { header: t('Birlik'), width: 10 },
+            { header: `${t('Narx')}, ${currency()}`, width: 14, type: 'money' },
+            { header: `${t('Summa')}, ${currency()}`, width: 16, type: 'money' },
+            { header: t("Bo'lim / sex"), width: 20 },
+            { header: t('Texnika'), width: 22 },
+            { header: t("Mas'ul shaxs"), width: 22 },
+            { header: t('Yetkazib beruvchi'), width: 22 },
+            { header: t('Nakladnoy №'), width: 14 },
+            { header: t('Izoh'), width: 24 },
+            { header: t('Kiritdi'), width: 18 },
+          ],
+          rows,
+        },
+      ],
+    };
   }
 
   async function cancelMove(m) {
-    if (!confirm('Bu harakat bekor qilinsinmi? Qoldiq qayta hisoblanadi.')) return;
+    if (!confirm(t('Bu harakat bekor qilinsinmi? Qoldiq qayta hisoblanadi.'))) return;
     try {
       await api.del(`/movements/${m._id}`);
-      toast('Harakat bekor qilindi');
+      toast(t('Harakat bekor qilindi'));
       setSelected(null);
       setItems((x) => x.filter((i) => i._id !== m._id));
     } catch (e) {
-      toast(e.message, 'error');
+      toast(t(e.message), 'error');
     }
   }
 
   return (
     <>
       <TopBar
-        title="Tarix"
-        sub={data ? `${data.total} ta yozuv` : ' '}
+        title={t('Tarix')}
+        sub={data ? t('{n} ta yozuv', { n: data.total }) : ' '}
         right={
           <>
-            <button className="icon-btn" onClick={exportCsv} disabled={exporting} aria-label="Excelga yuklab olish">
-              <Download />
-            </button>
-            <button className="icon-btn" onClick={() => setFilterOpen(true)} aria-label="Filtr" style={{ position: 'relative' }}>
+            <ExportButton build={buildExport} title={t('Kirim-chiqim tarixi')} />
+            <button className="icon-btn" onClick={() => setFilterOpen(true)} aria-label={t('Filtr')} style={{ position: 'relative' }}>
               <SlidersHorizontal />
               {activeFilters > 0 && (
                 <span
@@ -141,7 +173,7 @@ function TarixInner() {
             ['out', 'Chiqim'],
           ].map(([v, l]) => (
             <button key={v} className={type === v ? 'active' : ''} onClick={() => setType(v)}>
-              {l}
+              {t(l)}
             </button>
           ))}
         </div>
@@ -152,7 +184,7 @@ function TarixInner() {
               className={`chip ${period === p.v ? 'active' : ''}`}
               onClick={() => (p.v === 'custom' ? setCustomOpen(true) : setPeriod(p.v))}
             >
-              {p.v === 'custom' && period === 'custom' ? `${custom.from} — ${custom.to}` : p.l}
+              {p.v === 'custom' && period === 'custom' ? `${custom.from} — ${custom.to}` : t(p.l)}
             </button>
           ))}
         </div>
@@ -163,7 +195,7 @@ function TarixInner() {
           <ListSkeleton rows={6} />
         ) : items.length === 0 ? (
           <div className="card">
-            <Empty icon={History} title="Yozuv topilmadi" text="Tanlangan davr yoki filtr bo'yicha harakat yo'q" />
+            <Empty icon={History} title={t('Yozuv topilmadi')} text={t("Tanlangan davr yoki filtr bo'yicha harakat yo'q")} />
           </div>
         ) : (
           <div>
@@ -175,9 +207,9 @@ function TarixInner() {
                   <div className="day-head row between">
                     <span>{dayLabel(g.date)}</span>
                     <span className="xs faint">
-                      {inSum > 0 && <span className="c-in">{inSum} kirim</span>}
+                      {inSum > 0 && <span className="c-in">{t('{n} kirim', { n: inSum })}</span>}
                       {inSum > 0 && outSum > 0 && ' · '}
-                      {outSum > 0 && <span className="c-out">{outSum} chiqim</span>}
+                      {outSum > 0 && <span className="c-out">{t('{n} chiqim', { n: outSum })}</span>}
                     </span>
                   </div>
                   <div className="list">
@@ -190,7 +222,7 @@ function TarixInner() {
             })}
             {data && data.page < data.pages && (
               <button className="btn btn-ghost btn-block mt-16" disabled={loading} onClick={() => setPage((p) => p + 1)}>
-                {loading ? 'Yuklanmoqda…' : "Ko'proq ko'rsatish"}
+                {loading ? t('Yuklanmoqda…') : t("Ko'proq ko'rsatish")}
               </button>
             )}
           </div>
@@ -198,30 +230,34 @@ function TarixInner() {
       </div>
 
       {/* Filtr */}
-      <Sheet open={filterOpen} onClose={() => setFilterOpen(false)} title="Filtr">
+      <Sheet open={filterOpen} onClose={() => setFilterOpen(false)} title={t('Filtr')}>
         <div className="stack">
           <div className="field">
-            <label>Kategoriya</label>
+            <label>{t('Kategoriya')}</label>
             <select className="select" value={filters.category} onChange={(e) => setFilters((f) => ({ ...f, category: e.target.value }))}>
-              <option value="">Barchasi</option>
+              <option value="">{t('Barchasi')}</option>
               {(cats.data || []).map((c) => (
-                <option key={c._id} value={c._id}>{c.name}</option>
+                <option key={c._id} value={c._id}>
+                  {c.name}
+                </option>
               ))}
             </select>
           </div>
           <div className="field">
-            <label>Bo'lim / sex</label>
+            <label>{t("Bo'lim / sex")}</label>
             <select className="select" value={filters.department} onChange={(e) => setFilters((f) => ({ ...f, department: e.target.value }))}>
-              <option value="">Barchasi</option>
+              <option value="">{t('Barchasi')}</option>
               {(deps.data || []).map((c) => (
-                <option key={c._id} value={c._id}>{c.name}</option>
+                <option key={c._id} value={c._id}>
+                  {c.name}
+                </option>
               ))}
             </select>
           </div>
           <div className="field">
-            <label>Texnika</label>
+            <label>{t('Texnika')}</label>
             <select className="select" value={filters.vehicle} onChange={(e) => setFilters((f) => ({ ...f, vehicle: e.target.value }))}>
-              <option value="">Barchasi</option>
+              <option value="">{t('Barchasi')}</option>
               {(vehs.data || []).map((c) => (
                 <option key={c._id} value={c._id}>
                   {c.name}
@@ -232,25 +268,25 @@ function TarixInner() {
           </div>
           <div className="grid-2">
             <button className="btn btn-ghost" onClick={() => setFilters({ category: '', department: '', vehicle: '' })}>
-              Tozalash
+              {t('Tozalash')}
             </button>
             <button className="btn btn-primary" onClick={() => setFilterOpen(false)}>
-              Ko'rsatish
+              {t("Ko'rsatish")}
             </button>
           </div>
         </div>
       </Sheet>
 
       {/* Ixtiyoriy davr */}
-      <Sheet open={customOpen} onClose={() => setCustomOpen(false)} title="Davrni tanlang">
+      <Sheet open={customOpen} onClose={() => setCustomOpen(false)} title={t('Davrni tanlang')}>
         <div className="stack">
           <div className="grid-2">
             <div className="field">
-              <label>Dan</label>
+              <label>{t('Dan')}</label>
               <input className="input" type="date" value={custom.from} onChange={(e) => setCustom((c) => ({ ...c, from: e.target.value }))} />
             </div>
             <div className="field">
-              <label>Gacha</label>
+              <label>{t('Gacha')}</label>
               <input className="input" type="date" value={custom.to} onChange={(e) => setCustom((c) => ({ ...c, to: e.target.value }))} />
             </div>
           </div>
@@ -261,18 +297,18 @@ function TarixInner() {
               setCustomOpen(false);
             }}
           >
-            Qo'llash
+            {t("Qo'llash")}
           </button>
         </div>
       </Sheet>
 
-      <Sheet open={!!selected} onClose={() => setSelected(null)} title="Harakat tafsilotlari">
+      <Sheet open={!!selected} onClose={() => setSelected(null)} title={t('Harakat tafsilotlari')}>
         {selected && (
           <>
             <MovementDetail m={selected} />
             {can('admin') && (
               <button className="btn btn-danger btn-block mt-16" onClick={() => cancelMove(selected)}>
-                <Trash2 /> Harakatni bekor qilish
+                <Trash2 /> {t('Harakatni bekor qilish')}
               </button>
             )}
           </>

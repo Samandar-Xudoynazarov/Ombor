@@ -4,10 +4,12 @@ import { useState } from 'react';
 import { Plus, Search } from 'lucide-react';
 import { Sheet, CategoryAvatar, Empty, ListSkeleton, StockBadge } from './ui';
 import { useApi, useDebounced } from '@/lib/hooks';
-import { num } from '@/lib/format';
+import { useT } from '@/lib/i18n';
+import { num, unitLabel } from '@/lib/format';
 
 // Mahsulot tanlash oynasi (qidiruv + kategoriya filtri)
 export default function ProductPicker({ open, onClose, onSelect, onCreate, onlyInStock }) {
+  const t = useT();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
   const q = useDebounced(search, 250);
@@ -17,20 +19,20 @@ export default function ProductPicker({ open, onClose, onSelect, onCreate, onlyI
   const list = (data || []).filter((p) => !onlyInStock || p.quantity > 0);
 
   return (
-    <Sheet open={open} onClose={onClose} title="Mahsulotni tanlang">
+    <Sheet open={open} onClose={onClose} title={t('Mahsulotni tanlang')}>
       <div className="stack" style={{ gap: 10 }}>
         <div className="search">
           <Search />
           <input
             autoFocus
-            placeholder="Nomi yoki kodi bo'yicha qidirish"
+            placeholder={t("Nomi yoki kodi bo'yicha qidirish")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
         <div className="chips">
           <button className={`chip ${!category ? 'active' : ''}`} onClick={() => setCategory('')}>
-            Barchasi
+            {t('Barchasi')}
           </button>
           {(cats.data || []).map((c) => (
             <button
@@ -48,8 +50,8 @@ export default function ProductPicker({ open, onClose, onSelect, onCreate, onlyI
           <ListSkeleton rows={4} />
         ) : list.length === 0 ? (
           <Empty
-            title={onlyInStock ? 'Omborda mavjud mahsulot topilmadi' : 'Mahsulot topilmadi'}
-            text={search ? `"${search}" bo'yicha hech narsa yo'q` : null}
+            title={onlyInStock ? t('Omborda mavjud mahsulot topilmadi') : t('Mahsulot topilmadi')}
+            text={search ? t('"{q}" bo\'yicha hech narsa yo\'q', { q: search }) : null}
           />
         ) : (
           <div className="list">
@@ -58,11 +60,11 @@ export default function ProductPicker({ open, onClose, onSelect, onCreate, onlyI
                 <CategoryAvatar category={p.category} />
                 <div className="grow">
                   <div className="title ellipsis">{p.name}</div>
-                  <div className="meta ellipsis">{p.category?.name || 'Kategoriyasiz'}</div>
+                  <div className="meta ellipsis">{p.category?.name || t('Kategoriyasiz')}</div>
                 </div>
                 <div className="end">
                   <div className="bold tabular">
-                    {num(p.quantity)} <span className="small muted">{p.unit}</span>
+                    {num(p.quantity)} <span className="small muted">{unitLabel(p.unit)}</span>
                   </div>
                   <StockBadge product={p} />
                 </div>
@@ -73,7 +75,7 @@ export default function ProductPicker({ open, onClose, onSelect, onCreate, onlyI
 
         {onCreate && (
           <button className="btn btn-soft btn-block" onClick={() => onCreate(search)}>
-            <Plus /> Yangi mahsulot qo'shish
+            <Plus /> {t("Yangi mahsulot qo'shish")}
           </button>
         )}
       </div>

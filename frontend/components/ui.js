@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import {
   ArrowDownToLine, ArrowUpFromLine, BrickWall, Cable, CircleAlert, CircleCheck, ChevronLeft, Cog,
@@ -8,6 +9,7 @@ import {
   Lightbulb, Tractor, Factory,
 } from 'lucide-react';
 import { stockStatus } from '@/lib/format';
+import { useT } from '@/lib/i18n';
 
 /* ---------- Kategoriya ikonkalari ---------- */
 export const CATEGORY_ICONS = {
@@ -47,22 +49,24 @@ export function MoveAvatar({ type, size }) {
 }
 
 export function StockBadge({ product }) {
+  const t = useT();
   const s = stockStatus(product);
-  if (s === 'empty') return <span className="badge b-empty">Tugagan</span>;
-  if (s === 'low') return <span className="badge b-low">Kam qoldi</span>;
-  return <span className="badge b-ok">Yetarli</span>;
+  if (s === 'empty') return <span className="badge b-empty">{t('Tugagan')}</span>;
+  if (s === 'low') return <span className="badge b-low">{t('Kam qoldi')}</span>;
+  return <span className="badge b-ok">{t('Yetarli')}</span>;
 }
 
 /* ---------- Yuqori panel ---------- */
 export function TopBar({ title, sub, back, right }) {
   const router = useRouter();
+  const t = useT();
   return (
     <header className="topbar">
       <div className="topbar-inner">
         {back && (
           <button
             className="icon-btn plain"
-            aria-label="Orqaga"
+            aria-label={t('Orqaga')}
             onClick={() => (window.history.length > 1 ? router.back() : router.push(back === true ? '/' : back))}
             style={{ marginLeft: -8 }}
           >
@@ -81,6 +85,9 @@ export function TopBar({ title, sub, back, right }) {
 
 /* ---------- Bottom sheet ---------- */
 export function Sheet({ open, onClose, title, children, footer }) {
+  const t = useT();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   useEffect(() => {
     if (!open) return;
     const prev = document.body.style.overflow;
@@ -93,15 +100,16 @@ export function Sheet({ open, onClose, title, children, footer }) {
     };
   }, [open, onClose]);
 
-  if (!open) return null;
-  return (
+  if (!open || !mounted) return null;
+  // Portal: sahifadagi boshqa qatlamlar (masalan, yuqori panel) ustida chiqishi uchun
+  return createPortal(
     <div className="sheet-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose?.()}>
       <div className="sheet" role="dialog" aria-modal="true">
         <div className="sheet-handle" />
         {title && (
           <div className="sheet-head">
             <h2>{title}</h2>
-            <button className="icon-btn plain" onClick={onClose} aria-label="Yopish">
+            <button className="icon-btn plain" onClick={onClose} aria-label={t('Yopish')}>
               <X />
             </button>
           </div>
@@ -109,7 +117,8 @@ export function Sheet({ open, onClose, title, children, footer }) {
         <div className="sheet-body">{children}</div>
         {footer && <div style={{ padding: '0 16px 16px' }}>{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -175,15 +184,16 @@ export function Spinner() {
 }
 
 export function ErrorBox({ error, onRetry }) {
+  const t = useT();
   return (
     <Empty
       icon={CircleAlert}
-      title="Ma'lumot yuklanmadi"
+      title={t("Ma'lumot yuklanmadi")}
       text={error?.message}
       action={
         onRetry && (
           <button className="btn btn-ghost btn-sm" onClick={onRetry}>
-            Qayta urinish
+            {t('Qayta urinish')}
           </button>
         )
       }

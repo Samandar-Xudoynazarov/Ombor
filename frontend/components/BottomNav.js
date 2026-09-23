@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { Sheet } from './ui';
 import { useAuth } from '@/lib/auth';
+import { useT } from '@/lib/i18n';
 
 const LINKS = [
   { href: '/', label: 'Asosiy', icon: House },
@@ -21,6 +22,7 @@ export default function BottomNav() {
   const pathname = usePathname();
   const router = useRouter();
   const { can } = useAuth();
+  const t = useT();
   const [open, setOpen] = useState(false);
   const canWrite = can('write');
 
@@ -38,21 +40,21 @@ export default function BottomNav() {
           <div className="logo-mark sm">
             <Warehouse />
           </div>
-          Zavod ombori
+          {t('Zavod ombori')}
         </div>
         {LINKS.map((l, i) =>
           l ? (
             <Link key={l.href} href={l.href} className={`nav-item ${isActive(l.href) ? 'active' : ''}`}>
               <l.icon />
-              <span>{l.label}</span>
+              <span>{t(l.label)}</span>
             </Link>
           ) : (
             <div key={i} className="nav-fab-wrap">
               {canWrite && (
-                <button className={`nav-fab ${open ? 'open' : ''}`} onClick={() => setOpen(true)} aria-label="Yangi amal">
+                <button className={`nav-fab ${open ? 'open' : ''}`} onClick={() => setOpen(true)} aria-label={t('Yangi amal')}>
                   <Plus />
                   <span className="fab-label" style={{ display: 'none' }}>
-                    Yangi amal
+                    {t('Yangi amal')}
                   </span>
                 </button>
               )}
@@ -61,19 +63,19 @@ export default function BottomNav() {
         )}
         <Link href="/sozlamalar" className={`nav-item nav-desktop ${isActive('/sozlamalar') ? 'active' : ''}`}>
           <Settings />
-          <span>Sozlamalar</span>
+          <span>{t('Sozlamalar')}</span>
         </Link>
       </nav>
 
-      <Sheet open={open} onClose={() => setOpen(false)} title="Nima qilamiz?">
+      <Sheet open={open} onClose={() => setOpen(false)} title={t('Nima qilamiz?')}>
         <div className="action-sheet-grid">
           <button className="action-tile" onClick={() => go('/kirim')}>
             <div className="avatar" style={{ background: 'var(--in-soft)', color: 'var(--in)' }}>
               <ArrowDownToLine />
             </div>
             <div>
-              <div className="bold">Kirim</div>
-              <div className="small muted">Omborga tovar keldi</div>
+              <div className="bold">{t('Kirim')}</div>
+              <div className="small muted">{t('Omborga tovar keldi')}</div>
             </div>
           </button>
           <button className="action-tile" onClick={() => go('/chiqim')}>
@@ -81,8 +83,8 @@ export default function BottomNav() {
               <ArrowUpFromLine />
             </div>
             <div>
-              <div className="bold">Chiqim</div>
-              <div className="small muted">Ombordan tovar berildi</div>
+              <div className="bold">{t('Chiqim')}</div>
+              <div className="small muted">{t('Ombordan tovar berildi')}</div>
             </div>
           </button>
           <button className="action-tile" onClick={() => go('/ombor?yangi=1')}>
@@ -90,8 +92,8 @@ export default function BottomNav() {
               <PackagePlus />
             </div>
             <div>
-              <div className="bold">Yangi mahsulot</div>
-              <div className="small muted">Ro'yxatga yangi nom qo'shish</div>
+              <div className="bold">{t('Yangi mahsulot')}</div>
+              <div className="small muted">{t("Ro'yxatga yangi nom qo'shish")}</div>
             </div>
           </button>
         </div>

@@ -6,9 +6,11 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Boxes, Plus, Search } from 'lucide-react';
 import { TopBar, CategoryAvatar, ListSkeleton, Empty, ErrorBox, StockBadge } from '@/components/ui';
 import ProductForm from '@/components/ProductForm';
+import ExportButton from '@/components/ExportSheet';
 import { useApi, useDebounced } from '@/lib/hooks';
 import { useAuth } from '@/lib/auth';
-import { num, stockStatus } from '@/lib/format';
+import { useT } from '@/lib/i18n';
+import { num, stockStatus, toDateInput, unitLabel, currency } from '@/lib/format';
 
 const STATUS = [
   { v: '', l: 'Hammasi' },
@@ -20,6 +22,7 @@ function OmborInner() {
   const params = useSearchParams();
   const router = useRouter();
   const { can } = useAuth();
+  const t = useT();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState(params.get('category') || '');
   const [status, setStatus] = useState(params.get('status') || '');
@@ -38,28 +41,82 @@ function OmborInner() {
 
   const totalCount = (cats.data || []).reduce((s, c) => s + c.productCount, 0);
 
+  // Excel: ombordagi qoldiqlar
+  async function buildExport() {
+    const list = data || [];
+    const statusText = (p) => {
+      const s = stockStatus(p);
+      return s === 'empty' ? t('Tugagan') : s === 'low' ? t('Kam qoldi') : t('Yetarli');
+    };
+    const rows = list.map((p) => [
+      p.name,
+      p.category?.name || '',
+      p.code || '',
+      p.quantity,
+      unitLabel(p.unit),
+      p.minQty || '',
+      p.avgPrice || '',
+      (p.quantity > 0 ? p.quantity : 0) * (p.avgPrice || 0) || '',
+      statusText(p),
+      p.note || '',
+    ]);
+    const totalValue = list.reduce((s, p) => s + Math.max(p.quantity, 0) * (p.avgPrice || 0), 0);
+    if (rows.length) {
+      const total = [t('JAMI'), '', '', '', '', '', '', totalValue, '', ''];
+      total.__bold = true;
+      rows.push(total);
+    }
+    return {
+      filename: `ombor-qoldiq-${toDateInput()}.xlsx`,
+      rowCount: list.length,
+      sheets: [
+        {
+          name: t('Ombor'),
+          title: t('Ombor qoldiqlari'),
+          subtitle: `${t('Sana')}: ${new Date().toLocaleString('ru-RU')}`,
+          columns: [
+            { header: t('Mahsulot'), width: 34 },
+            { header: t('Kategoriya'), width: 20 },
+            { header: t('Kod'), width: 12 },
+            { header: t('Qoldiq'), width: 12, type: 'num' },
+            { header: t('Birlik'), width: 10 },
+            { header: t('Minimal'), width: 12, type: 'num' },
+            { header: `${t("O'rtacha narx")}, ${currency()}`, width: 16, type: 'money' },
+            { header: `${t('Qiymati')}, ${currency()}`, width: 18, type: 'money' },
+            { header: t('Holati'), width: 14 },
+            { header: t('Izoh'), width: 24 },
+          ],
+          rows,
+        },
+      ],
+    };
+  }
+
   return (
     <>
       <TopBar
-        title="Ombor"
-        sub={data ? `${data.length} ta mahsulot` : ' '}
+        title={t('Ombor')}
+        sub={data ? t('{n} ta mahsulot', { n: data.length }) : ' '}
         right={
-          can('write') && (
-            <button className="icon-btn" onClick={() => setFormOpen(true)} aria-label="Mahsulot qo'shish">
-              <Plus />
-            </button>
-          )
+          <>
+            <ExportButton build={buildExport} title={t('Ombor qoldiqlari')} />
+            {can('write') && (
+              <button className="icon-btn" onClick={() => setFormOpen(true)} aria-label={t("Mahsulot qo'shish")}>
+                <Plus />
+              </button>
+            )}
+          </>
         }
       />
       <div className="page stack" style={{ gap: 10 }}>
         <div className="search">
           <Search />
-          <input placeholder="Mahsulot qidirish…" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input placeholder={t('Mahsulot qidirish…')} value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
 
         <div className="chips">
           <button className={`chip ${!category ? 'active' : ''}`} onClick={() => setCategory('')}>
-            Barchasi {cats.data && <span className="count">{totalCount}</span>}
+            {t('Barchasi')} {cats.data && <span className="count">{totalCount}</span>}
           </button>
           {(cats.data || []).map((c) => (
             <button key={c._id} className={`chip ${category === c._id ? 'active' : ''}`} onClick={() => setCategory(c._id)}>
@@ -73,7 +130,7 @@ function OmborInner() {
         <div className="segmented">
           {STATUS.map((s) => (
             <button key={s.v} className={status === s.v ? 'active' : ''} onClick={() => setStatus(s.v)}>
-              {s.l}
+              {t(s.l)}
             </button>
           ))}
         </div>
@@ -86,13 +143,13 @@ function OmborInner() {
           <div className="card">
             <Empty
               icon={Boxes}
-              title="Mahsulot topilmadi"
-              text={search || category || status ? 'Filtrni o\'zgartirib ko\'ring' : 'Birinchi mahsulotni qo\'shing'}
+              title={t('Mahsulot topilmadi')}
+              text={search || category || status ? t("Filtrni o'zgartirib ko'ring") : t("Birinchi mahsulotni qo'shing")}
               action={
                 can('write') &&
                 !search && (
                   <button className="btn btn-primary btn-sm" onClick={() => setFormOpen(true)}>
-                    <Plus /> Mahsulot qo'shish
+                    <Plus /> {t("Mahsulot qo'shish")}
                   </button>
                 )
               }
@@ -109,7 +166,7 @@ function OmborInner() {
                   <div className="grow">
                     <div className="title ellipsis">{p.name}</div>
                     <div className="meta ellipsis">
-                      {p.category?.name || 'Kategoriyasiz'}
+                      {p.category?.name || t('Kategoriyasiz')}
                       {p.code ? ` · ${p.code}` : ''}
                     </div>
                     {pct !== null && (
@@ -125,7 +182,7 @@ function OmborInner() {
                   </div>
                   <div className="end">
                     <div className="bold tabular" style={{ fontSize: 16 }}>
-                      {num(p.quantity)} <span className="small muted">{p.unit}</span>
+                      {num(p.quantity)} <span className="small muted">{unitLabel(p.unit)}</span>
                     </div>
                     <StockBadge product={p} />
                   </div>

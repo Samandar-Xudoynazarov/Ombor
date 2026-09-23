@@ -6,25 +6,32 @@ import { TopBar, Empty, ErrorBox, ListSkeleton, Sheet, useToast } from '@/compon
 import { useApi } from '@/lib/hooks';
 import { useAuth } from '@/lib/auth';
 import { api } from '@/lib/api';
-import { ROLES } from '@/lib/format';
-
-const ROLE_HINT = {
-  admin: "Hamma narsa: foydalanuvchilar, o'chirish, bekor qilish",
-  omborchi: 'Kirim, chiqim, mahsulot va kategoriya qo\'shish',
-  kuzatuvchi: "Faqat ko'rish va hisobotlar",
-};
+import { useT } from '@/lib/i18n';
+import { ROLE_KEYS } from '@/lib/format';
 
 export default function Foydalanuvchilar() {
   const { user: me, can } = useAuth();
   const { data, loading, error, reload } = useApi('/users', null, { skip: !can('admin') });
   const toast = useToast();
+  const t = useT();
   const [edit, setEdit] = useState(null);
   const [f, setF] = useState({});
   const [saving, setSaving] = useState(false);
 
+  const ROLES = { admin: t('Administrator'), omborchi: t('Omborchi'), kuzatuvchi: t('Kuzatuvchi') };
+  const ROLE_HINT = {
+    admin: t("Hamma narsa: foydalanuvchilar, o'chirish, bekor qilish"),
+    omborchi: t("Kirim, chiqim, mahsulot va kategoriya qo'shish"),
+    kuzatuvchi: t("Faqat ko'rish va hisobotlar"),
+  };
+
   function openForm(u) {
     setEdit(u || {});
-    setF(u ? { name: u.name, username: u.username, role: u.role, active: u.active, password: '' } : { name: '', username: '', role: 'omborchi', active: true, password: '' });
+    setF(
+      u
+        ? { name: u.name, username: u.username, role: u.role, active: u.active, password: '' }
+        : { name: '', username: '', role: 'omborchi', active: true, password: '' }
+    );
   }
 
   async function save(e) {
@@ -38,34 +45,34 @@ export default function Foydalanuvchilar() {
       } else {
         await api.post('/users', f);
       }
-      toast('Saqlandi');
+      toast(t('Saqlandi'));
       setEdit(null);
       reload();
     } catch (err) {
-      toast(err.message, 'error');
+      toast(t(err.message), 'error');
     } finally {
       setSaving(false);
     }
   }
 
   async function remove() {
-    if (!confirm(`${edit.name} o'chirilsinmi?`)) return;
+    if (!confirm(t("{name} o'chirilsinmi?", { name: edit.name }))) return;
     try {
       await api.del(`/users/${edit._id}`);
-      toast("O'chirildi");
+      toast(t("O'chirildi"));
       setEdit(null);
       reload();
     } catch (err) {
-      toast(err.message, 'error');
+      toast(t(err.message), 'error');
     }
   }
 
   if (!can('admin')) {
     return (
       <>
-        <TopBar title="Foydalanuvchilar" back="/sozlamalar" />
+        <TopBar title={t('Foydalanuvchilar')} back="/sozlamalar" />
         <div className="page">
-          <Empty icon={Users} title="Ruxsat yo'q" text="Bu bo'lim faqat administrator uchun" />
+          <Empty icon={Users} title={t("Ruxsat yo'q")} text={t("Bu bo'lim faqat administrator uchun")} />
         </div>
       </>
     );
@@ -76,10 +83,10 @@ export default function Foydalanuvchilar() {
   return (
     <>
       <TopBar
-        title="Foydalanuvchilar"
+        title={t('Foydalanuvchilar')}
         back="/sozlamalar"
         right={
-          <button className="icon-btn" onClick={() => openForm(null)} aria-label="Qo'shish">
+          <button className="icon-btn" onClick={() => openForm(null)} aria-label={t("Qo'shish")}>
             <Plus />
           </button>
         }
@@ -98,25 +105,32 @@ export default function Foydalanuvchilar() {
                 </div>
                 <div className="grow">
                   <div className="title ellipsis">
-                    {u.name} {u._id === me.id && <span className="faint small">(siz)</span>}
+                    {u.name} {u._id === me.id && <span className="faint small">({t('siz')})</span>}
                   </div>
                   <div className="meta">@{u.username}</div>
                 </div>
-                <span className={`badge ${u.active ? 'b-neutral' : 'b-empty'}`}>{u.active ? ROLES[u.role] : 'Bloklangan'}</span>
+                <span className={`badge ${u.active ? 'b-neutral' : 'b-empty'}`}>
+                  {u.active ? ROLES[u.role] : t('Bloklangan')}
+                </span>
               </button>
             ))}
           </div>
         )}
       </div>
 
-      <Sheet open={!!edit} onClose={() => setEdit(null)} title={edit?._id ? 'Foydalanuvchi' : 'Yangi foydalanuvchi'}>
+      <Sheet open={!!edit} onClose={() => setEdit(null)} title={edit?._id ? t('Foydalanuvchi') : t('Yangi foydalanuvchi')}>
         <form className="stack" onSubmit={save}>
           <div className="field">
-            <label>F.I.Sh.</label>
-            <input className="input" value={f.name || ''} onChange={(e) => setF((x) => ({ ...x, name: e.target.value }))} placeholder="Aliyev Vali" />
+            <label>{t('F.I.Sh.')}</label>
+            <input
+              className="input"
+              value={f.name || ''}
+              onChange={(e) => setF((x) => ({ ...x, name: e.target.value }))}
+              placeholder={t('Aliyev Vali')}
+            />
           </div>
           <div className="field">
-            <label>Login</label>
+            <label>{t('Login')}</label>
             <input
               className="input"
               autoCapitalize="none"
@@ -127,15 +141,22 @@ export default function Foydalanuvchilar() {
             />
           </div>
           <div className="field">
-            <label>{edit?._id ? 'Yangi parol (o\'zgartirish uchun)' : 'Parol'}</label>
-            <input className="input" type="text" autoComplete="new-password" value={f.password || ''} onChange={(e) => setF((x) => ({ ...x, password: e.target.value }))} placeholder="Kamida 6 belgi" />
+            <label>{edit?._id ? t("Yangi parol (o'zgartirish uchun)") : t('Parol')}</label>
+            <input
+              className="input"
+              type="text"
+              autoComplete="new-password"
+              value={f.password || ''}
+              onChange={(e) => setF((x) => ({ ...x, password: e.target.value }))}
+              placeholder={t('Kamida 6 belgi')}
+            />
           </div>
           {!isSelf && (
             <>
               <div className="field">
-                <span className="field-label">Rol</span>
+                <span className="field-label">{t('Rol')}</span>
                 <div className="stack" style={{ gap: 8 }}>
-                  {Object.entries(ROLES).map(([k, l]) => (
+                  {ROLE_KEYS.map((k) => (
                     <button
                       type="button"
                       key={k}
@@ -144,7 +165,7 @@ export default function Foydalanuvchilar() {
                       onClick={() => setF((x) => ({ ...x, role: k }))}
                     >
                       <div className="grow">
-                        <div className="bold">{l}</div>
+                        <div className="bold">{ROLES[k]}</div>
                         <div className="small muted">{ROLE_HINT[k]}</div>
                       </div>
                     </button>
@@ -153,18 +174,23 @@ export default function Foydalanuvchilar() {
               </div>
               {edit?._id && (
                 <label className="row card card-pad" style={{ cursor: 'pointer' }}>
-                  <input type="checkbox" checked={!f.active} onChange={(e) => setF((x) => ({ ...x, active: !e.target.checked }))} style={{ width: 20, height: 20 }} />
-                  <span className="grow">Bloklash (tizimga kira olmaydi)</span>
+                  <input
+                    type="checkbox"
+                    checked={!f.active}
+                    onChange={(e) => setF((x) => ({ ...x, active: !e.target.checked }))}
+                    style={{ width: 20, height: 20 }}
+                  />
+                  <span className="grow">{t('Bloklash (tizimga kira olmaydi)')}</span>
                 </label>
               )}
             </>
           )}
           <button className="btn btn-primary btn-block" disabled={saving}>
-            Saqlash
+            {t('Saqlash')}
           </button>
           {edit?._id && !isSelf && (
             <button type="button" className="btn btn-danger btn-block" onClick={remove}>
-              <Trash2 /> O'chirish
+              <Trash2 /> {t("O'chirish")}
             </button>
           )}
         </form>

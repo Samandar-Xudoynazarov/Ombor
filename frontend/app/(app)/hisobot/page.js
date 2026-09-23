@@ -3,9 +3,12 @@
 import { useMemo, useState } from 'react';
 import { BarChart3, ChevronDown } from 'lucide-react';
 import { TopBar, ListSkeleton, Empty, ErrorBox, Sheet } from '@/components/ui';
+import ExportButton from '@/components/ExportSheet';
 import { useApi } from '@/lib/hooks';
+import { api } from '@/lib/api';
+import { useT } from '@/lib/i18n';
 import { PERIODS, periodRange } from '@/lib/period';
-import { money, moneyShort, num, toDateInput } from '@/lib/format';
+import { money, moneyShort, num, toDateInput, unitLabel, currency } from '@/lib/format';
 
 const TABS = {
   out: [
@@ -24,6 +27,7 @@ const TABS = {
 };
 
 export default function HisobotPage() {
+  const t = useT();
   const [type, setType] = useState('out');
   const [period, setPeriod] = useState('month');
   const [custom, setCustom] = useState({ from: toDateInput(), to: toDateInput() });
@@ -35,23 +39,105 @@ export default function HisobotPage() {
   const { data, loading, error, reload } = useApi('/stats/report', { type, ...range });
 
   const tabs = TABS[type];
-  const activeTab = tabs.some((t) => t[0] === tab) ? tab : 'byProduct';
+  const activeTab = tabs.some((x) => x[0] === tab) ? tab : 'byProduct';
   const rows = data?.[activeTab] || [];
   const hasMoney = (data?.total || 0) > 0;
   const metric = (r) => (hasMoney ? r.total : r.count);
   const max = Math.max(1, ...rows.map(metric));
   const color = type === 'in' ? 'var(--in)' : 'var(--out)';
 
+  const periodText = `${range.from ? new Date(range.from).toLocaleDateString('ru-RU') : '…'} — ${
+    range.to ? new Date(range.to).toLocaleDateString('ru-RU') : '…'
+  }`;
+
+  // Excel: hisobot (har bir bo'lim alohida varaqda)
+  async function buildExport() {
+    const d = await api.get('/stats/report', { type, ...range });
+
+    const groupSheet = (name, list, firstHeader) =>
+      list && list.length
+        ? {
+            name,
+            title: `${type === 'out' ? t('Chiqim (sarf)') : t('Kirim')} — ${name}`,
+            subtitle: `${t('Davr')}: ${periodText}`,
+            columns: [
+              { header: firstHeader, width: 26 },
+              { header: t('Mahsulot'), width: 30 },
+              { header: t('Miqdor'), width: 14, type: 'num' },
+              { header: t('Birlik'), width: 10 },
+              { header: `${t('Summa')}, ${currency()}`, width: 16, type: 'money' },
+            ],
+            rows: list.flatMap((g) => {
+              const head = [g.name || t("Noma'lum"), '', '', '', g.total || ''];
+              head.__bold = true;
+              const items = (g.items || []).map((it) => ['', it.name, it.quantity, unitLabel(it.unit), it.total || '']);
+              return [head, ...items];
+            }),
+          }
+        : null;
+
+    const sheets = [
+      {
+        name: t('Mahsulotlar'),
+        title: `${type === 'out' ? t('Chiqim (sarf)') : t('Kirim')} — ${t('Mahsulotlar')}`,
+        subtitle: `${t('Davr')}: ${periodText}`,
+        columns: [
+          { header: t('Mahsulot'), width: 32 },
+          { header: t('Kategoriya'), width: 20 },
+          { header: t('Miqdor'), width: 14, type: 'num' },
+          { header: t('Birlik'), width: 10 },
+          { header: t('Operatsiyalar'), width: 14, type: 'num' },
+          { header: `${t('Summa')}, ${currency()}`, width: 16, type: 'money' },
+        ],
+        rows: (() => {
+          const list = d.byProduct || [];
+          const r = list.map((x) => [x.name, x.category || '', x.quantity, unitLabel(x.unit), x.count, x.total || '']);
+          if (r.length) {
+            const total = [t('JAMI'), '', '', '', d.count, d.total || ''];
+            total.__bold = true;
+            r.push(total);
+          }
+          return r;
+        })(),
+      },
+      groupSheet(t("Bo'limlar"), d.byDepartment, t("Bo'lim / sex")),
+      groupSheet(t('Texnika'), d.byVehicle, t('Texnika')),
+      groupSheet(type === 'in' ? t('Qabul qilganlar') : t('Shaxslar'), d.byPerson, t("Mas'ul shaxs")),
+      groupSheet(t('Yetkazib beruvchilar'), d.bySupplier, t('Yetkazib beruvchi')),
+      d.byCategory && d.byCategory.length
+        ? {
+            name: t('Kategoriyalar'),
+            columns: [
+              { header: t('Kategoriya'), width: 26 },
+              { header: t('Operatsiyalar'), width: 14, type: 'num' },
+              { header: `${t('Summa')}, ${currency()}`, width: 16, type: 'money' },
+            ],
+            rows: d.byCategory.map((c) => [c.name || t('Kategoriyasiz'), c.count, c.total || '']),
+          }
+        : null,
+    ].filter(Boolean);
+
+    return {
+      filename: `ombor-hisobot-${toDateInput()}.xlsx`,
+      rowCount: d.count,
+      sheets,
+    };
+  }
+
   return (
     <>
-      <TopBar title="Hisobot" sub={type === 'out' ? 'Nima, qayerga, qancha sarflandi' : 'Omborga nima keldi'} />
+      <TopBar
+        title={t('Hisobot')}
+        sub={type === 'out' ? t('Nima, qayerga, qancha sarflandi') : t('Omborga nima keldi')}
+        right={<ExportButton build={buildExport} title={t('Hisobot')} />}
+      />
       <div className="page stack" style={{ gap: 10 }}>
         <div className="segmented">
           <button className={type === 'out' ? 'active' : ''} onClick={() => setType('out')}>
-            Chiqim (sarf)
+            {t('Chiqim (sarf)')}
           </button>
           <button className={type === 'in' ? 'active' : ''} onClick={() => setType('in')}>
-            Kirim
+            {t('Kirim')}
           </button>
         </div>
         <div className="chips">
@@ -61,20 +147,20 @@ export default function HisobotPage() {
               className={`chip ${period === p.v ? 'active' : ''}`}
               onClick={() => (p.v === 'custom' ? setCustomOpen(true) : setPeriod(p.v))}
             >
-              {p.v === 'custom' && period === 'custom' ? `${custom.from} — ${custom.to}` : p.l}
+              {p.v === 'custom' && period === 'custom' ? `${custom.from} — ${custom.to}` : t(p.l)}
             </button>
           ))}
         </div>
 
         <div className="stat-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
           <div className="card stat">
-            <span className="label">Jami summa</span>
+            <span className="label">{t('Jami summa')}</span>
             <span className="value" style={{ fontSize: 20, color }}>
-              {data ? (hasMoney ? `${moneyShort(data.total)} so'm` : '—') : '…'}
+              {data ? (hasMoney ? `${moneyShort(data.total)} ${currency()}` : '—') : '…'}
             </span>
           </div>
           <div className="card stat">
-            <span className="label">Operatsiyalar</span>
+            <span className="label">{t('Operatsiyalar')}</span>
             <span className="value" style={{ fontSize: 20 }}>
               {data ? data.count : '…'}
             </span>
@@ -84,7 +170,7 @@ export default function HisobotPage() {
         <div className="chips">
           {tabs.map(([k, l]) => (
             <button key={k} className={`chip ${activeTab === k ? 'active' : ''}`} onClick={() => setTab(k)}>
-              {l}
+              {t(l)}
             </button>
           ))}
         </div>
@@ -95,7 +181,7 @@ export default function HisobotPage() {
           <ListSkeleton rows={5} />
         ) : rows.length === 0 ? (
           <div className="card">
-            <Empty icon={BarChart3} title="Ma'lumot yo'q" text="Tanlangan davrda harakat bo'lmagan" />
+            <Empty icon={BarChart3} title={t("Ma'lumot yo'q")} text={t("Tanlangan davrda harakat bo'lmagan")} />
           </div>
         ) : activeTab === 'byProduct' ? (
           <div className="list">
@@ -105,12 +191,12 @@ export default function HisobotPage() {
                   <div className="grow">
                     <div className="bold ellipsis">{r.name}</div>
                     <div className="xs faint">
-                      {r.category || 'Kategoriyasiz'} · {r.count} marta
+                      {r.category || t('Kategoriyasiz')} · {t('{n} marta', { n: r.count })}
                     </div>
                   </div>
                   <div className="end" style={{ textAlign: 'right' }}>
                     <div className="bold tabular">
-                      {num(r.quantity)} <span className="small muted">{r.unit}</span>
+                      {num(r.quantity)} <span className="small muted">{unitLabel(r.unit)}</span>
                     </div>
                     {r.total > 0 && <div className="xs faint tabular">{money(r.total)}</div>}
                   </div>
@@ -130,22 +216,33 @@ export default function HisobotPage() {
                 <div className="bar-row" key={key}>
                   <button
                     className="row between"
-                    style={{ background: 'none', border: 0, padding: 0, cursor: r.items ? 'pointer' : 'default', textAlign: 'left', width: '100%' }}
+                    style={{
+                      background: 'none', border: 0, padding: 0, cursor: r.items ? 'pointer' : 'default',
+                      textAlign: 'left', width: '100%',
+                    }}
                     onClick={() => r.items && setOpen(expanded ? null : `${activeTab}:${key}`)}
                   >
                     <div className="grow">
                       <div className="bold ellipsis">
-                        {r.name || (activeTab === 'byCategory' ? 'Kategoriyasiz' : "Noma'lum")}
+                        {r.name || (activeTab === 'byCategory' ? t('Kategoriyasiz') : t("Noma'lum"))}
                         {r.code ? <span className="muted"> ({r.code})</span> : null}
                       </div>
                       <div className="xs faint">
-                        {r.count} marta{r.items ? ` · ${r.items.length} xil mahsulot` : ''}
+                        {t('{n} marta', { n: r.count })}
+                        {r.items ? ` · ${t('{n} xil mahsulot', { n: r.items.length })}` : ''}
                       </div>
                     </div>
                     <div className="row" style={{ gap: 6 }}>
                       {r.total > 0 && <span className="bold tabular small">{money(r.total)}</span>}
                       {r.items && (
-                        <ChevronDown size={18} style={{ transition: 'transform .2s', transform: expanded ? 'rotate(180deg)' : 'none', color: 'var(--text-3)' }} />
+                        <ChevronDown
+                          size={18}
+                          style={{
+                            transition: 'transform .2s',
+                            transform: expanded ? 'rotate(180deg)' : 'none',
+                            color: 'var(--text-3)',
+                          }}
+                        />
                       )}
                     </div>
                   </button>
@@ -158,7 +255,7 @@ export default function HisobotPage() {
                         <div key={i} className="kv" style={{ padding: '8px 12px' }}>
                           <span className="k ellipsis">{it.name}</span>
                           <span className="v tabular">
-                            {num(it.quantity)} {it.unit}
+                            {num(it.quantity)} {unitLabel(it.unit)}
                           </span>
                         </div>
                       ))}
@@ -171,20 +268,20 @@ export default function HisobotPage() {
         )}
         {!hasMoney && data && data.count > 0 && (
           <p className="xs faint" style={{ textAlign: 'center' }}>
-            Summalar ko'rinishi uchun kirimda narxni kiriting.
+            {t("Summalar ko'rinishi uchun kirimda narxni kiriting.")}
           </p>
         )}
       </div>
 
-      <Sheet open={customOpen} onClose={() => setCustomOpen(false)} title="Davrni tanlang">
+      <Sheet open={customOpen} onClose={() => setCustomOpen(false)} title={t('Davrni tanlang')}>
         <div className="stack">
           <div className="grid-2">
             <div className="field">
-              <label>Dan</label>
+              <label>{t('Dan')}</label>
               <input className="input" type="date" value={custom.from} onChange={(e) => setCustom((c) => ({ ...c, from: e.target.value }))} />
             </div>
             <div className="field">
-              <label>Gacha</label>
+              <label>{t('Gacha')}</label>
               <input className="input" type="date" value={custom.to} onChange={(e) => setCustom((c) => ({ ...c, to: e.target.value }))} />
             </div>
           </div>
@@ -195,7 +292,7 @@ export default function HisobotPage() {
               setCustomOpen(false);
             }}
           >
-            Qo'llash
+            {t("Qo'llash")}
           </button>
         </div>
       </Sheet>

@@ -13,8 +13,10 @@ ombor/
 - **Ombor**: mahsulotlar ro'yxati, qoldiq, kategoriya bo'yicha filtr, qidiruv, "Kam qoldi" / "Tugagan" belgilari
 - **Kirim**: miqdor, narx, yetkazib beruvchi, nakladnoy raqami, kim qabul qildi
 - **Chiqim**: bo'lim/sex, texnika/mashina, mas'ul shaxs, izoh. Ombordagidan ortiq chiqim qilib bo'lmaydi
-- **Tarix**: kun bo'yicha guruhlangan, davr va filtrlar, Excel (CSV) ga yuklab olish
+- **Tarix**: kun bo'yicha guruhlangan, davr va filtrlar, Excel faylga chiqarish
 - **Hisobot**: qaysi mahsulot, qaysi sex, qaysi texnika, kim qancha oldi — summalar bilan
+- **Uch til**: O'zbekcha (lotin), Ўзбекча (кирилл), Русский. Sozlamalar → Til bo'limidan almashtiriladi
+- **Excel (.xlsx)**: ombor qoldiqlari, tarix va hisobotni yuklab olish yoki to'g'ridan-to'g'ri ulashish (Telegram, pochta). iPhone'da "Ulashish" → "Fayllarga saqlash" ishlaydi
 - **Kategoriyalar**: o'zingiz yaratasiz (rang va belgi tanlanadi)
 - **Foydalanuvchilar va rollar**: Administrator, Omborchi, Kuzatuvchi
 - O'rtacha tannarx avtomatik hisoblanadi, ombor qiymati bosh sahifada ko'rinadi
@@ -94,6 +96,27 @@ git push -u origin main
 Shundan keyin ilova bosh ekrandan to'liq ekranli, brauzer panelisiz ochiladi — xuddi APK kabi. Ilova belgisini uzoq bossangiz, "Kirim" va "Chiqim" tezkor tugmalari chiqadi (Android).
 
 ---
+
+## Excel eksport
+
+Uchta joyda yuqori o'ng burchakdagi ⬇ tugmasi orqali:
+
+| Sahifa | Faylda nima bo'ladi |
+|---|---|
+| **Ombor** | Joriy qoldiqlar: mahsulot, kategoriya, kod, qoldiq, birlik, minimal, o'rtacha narx, qiymati, holati. Oxirida jami summa |
+| **Tarix** | Tanlangan davr va filtr bo'yicha barcha kirim-chiqim: sana, turi, mahsulot, miqdor, narx, summa, bo'lim, texnika, mas'ul shaxs, yetkazib beruvchi, nakladnoy, izoh, kim kiritgani |
+| **Hisobot** | Bir nechta varaq: Mahsulotlar, Bo'limlar, Texnika, Shaxslar, Yetkazib beruvchilar, Kategoriyalar. Har bir bo'lim yoki shaxs ostida qaysi materialdan qancha olingani ko'rinadi |
+
+Tugma bosilganda ikkita imkoniyat chiqadi:
+
+- **Ulashish** — telefonning ulashish oynasi ochiladi: Telegram, pochta, "Fayllarga saqlash". iPhone'da yuklab olish ba'zan ishlamaydi, shuning uchun aynan shu tugmadan foydalaning.
+- **Yuklab olish** — fayl "Yuklashlar" papkasiga saqlanadi (kompyuter va Android uchun qulay).
+
+Fayl tilga qarab tayyorlanadi: ruscha tanlansa, ustun nomlari ham ruscha chiqadi. Fayl nomi har doim lotin harflarida (`ombor-qoldiq-2026-09-23.xlsx`), chunki ba'zi telefonlar kirill nomli faylni noto'g'ri saqlaydi.
+
+## Tillar
+
+Sozlamalar → Til: **O'zbekcha**, **Ўзбекча**, **Русский**. Tanlov telefon xotirasida saqlanadi, har safar qayta tanlash shart emas. Tarjimalar `frontend/lib/dictionary.js` faylida — so'zni o'zgartirmoqchi bo'lsangiz, o'sha yerdan tahrirlaysiz. Sanalar, oylar va "so'm / сўм / сум" so'zi ham tilga moslashadi.
 
 ## Rollar
 

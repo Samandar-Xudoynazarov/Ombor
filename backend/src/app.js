@@ -4,12 +4,7 @@ const connectDB = require('./db');
 
 const app = express();
 
-// CORS: FRONTEND_URL da vergul bilan bir nechta manzil berish mumkin
-const allowed = (process.env.FRONTEND_URL || '')
-  .split(',')
-  .map((s) => s.trim().replace(/\/$/, ''))
-  .filter(Boolean);
-
+// CORS: hamma manzilga ruxsat (himoya JWT token orqali, cookie ishlatilmaydi)
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
 
